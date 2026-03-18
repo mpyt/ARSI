@@ -1,25 +1,23 @@
-# Video Frame Extractor
+# video_sample.py
 
 Skript pro extrakci snímků z videa podle zadaného sample rate.
 
-## Instalace
-```bash
-pip install opencv-python
-```
-
 ## Použití
-
-V souboru `extract_frames.py` uprav proměnné:
-
-- `VIDEO_PATH` — cesta k videu
-- `OUTPUT_DIR` — výstupní složka
-- `SAMPLE_RATE` — každý N-tý snímek (např. 30 = 1 fotka/s při 30 FPS)
-
-Spuštění:
-```bash
-python extract_frames.py
-```
-
+Vstupní proměnné
+- `VIDEO_PATH` - cesta k videu
+- `OUTPUT_DIR` - výstupní složka
+- `SAMPLE_RATE` - každý N-tý snímek (např. 30 = 1 fotka/s při 30 FPS)
 ## Výstup
 
 Snímky se uloží do `frames/<název_videa>/` jako JPEG soubory.
+
+# mask_windows.py
+
+Skript pro maskování oken pomocí polygonů z .json souboru vytvořeného pomocí labelme.
+
+## Použití
+Vstupní proměnné
+- 'INPUT_PATH' - cesta k fotce, nebo celé složce s fotkami
+- 'JSON_PATH' - cesta k hlavnímu .jsonu souboru
+- 'COLOR' - nastavení pomocí RGB barvu masky
+- 'OUTPUT_SUFFIX' - suffix pro zpracované soubory
