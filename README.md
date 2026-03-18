@@ -19,5 +19,6 @@ Skript pro maskování oken pomocí polygonů z .json souboru vytvořeného pomo
 Vstupní proměnné
 - `INPUT_PATH` - cesta k fotce, nebo celé složce s fotkami
 - `JSON_PATH` - cesta k hlavnímu .jsonu souboru
+- `OUTPUT_DIR` - cesta k výstupní složce pro zpracované soubory 
 - `COLOR` - nastavení pomocí RGB barvu masky
 - `OUTPUT_SUFFIX` - suffix pro zpracované soubory
