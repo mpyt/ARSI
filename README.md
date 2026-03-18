@@ -23,4 +23,3 @@ python extract_frames.py
 ## Výstup
 
 Snímky se uloží do `frames/<název_videa>/` jako JPEG soubory.
-```
