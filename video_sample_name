@@ -1,0 +1,196 @@
+"""
+extract_frames.py
+Stříhá videa na framy a pojmenovává je pro ARSI dataset.
+
+Naming convention: tram_{TRAM_ID}_v{video_num}_f{NNNN}.jpg
+Example:           tram_1762_v1_f0001.jpg, tram_1762_v2_f0001.jpg, ...
+
+Současně generuje:
+    tram_{TRAM_ID}/raw/                    — všechny extrahované framy
+    tram_{TRAM_ID}/tram_{TRAM_ID}_index.csv — index pro ground truth (vyplníš ručně)
+
+Použití:
+    python extract_frames.py
+
+Konfigurace v sekci USER CONFIG níže.
+
+Závislosti: opencv-python, numpy
+    pip install opencv-python numpy
+"""
+
+import cv2
+import numpy as np
+from pathlib import Path
+import csv
+import re
+import sys
+
+# ============================================================
+# USER CONFIG — UPRAV TYTO HODNOTY
+# ============================================================
+
+# Tram ID (z názvu video souborů: 1762-1.mp4 → ID je "1762")
+TRAM_ID = "1762"
+
+# Složka se vstupními videi
+VIDEO_DIR = Path("./videos")
+
+# Pattern pro identifikaci videí: TRAM_ID-N.ext
+# Zachytí: 1762-1.mp4, 1762-2.mp4, 1762-3.MP4, ...
+VIDEO_PATTERN = re.compile(r"^(\d+)-(\d+)\.(mp4|MP4|avi|AVI|mov|MOV|mkv|MKV)$")
+
+# Kořenový výstupní adresář (vznikne v něm tram_{TRAM_ID}/raw/)
+OUTPUT_ROOT = Path("./ARSI_dataset")
+
+# Sample rate
+#   "fps":     extrahuj N framů za sekundu video času (1.0 = 1 frame/s)
+#   "every_n": extrahuj každý N-tý frame zdrojového videa
+SAMPLE_MODE = "fps"
+SAMPLE_FPS = 1.0
+SAMPLE_EVERY_N = 30
+
+# Kvalita JPEG (0-100, 95 je rozumný kompromis kvalita/velikost)
+JPEG_QUALITY = 95
+
+# ============================================================
+# KÓD
+# ============================================================
+
+def extract_video(video_path: Path, video_num: int, output_dir: Path,
+                  csv_rows: list) -> int:
+    """Stříhá jedno video. Vrátí počet uložených framů.
+    Do csv_rows append uje záznamy pro index."""
+
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        print(f"  [ERROR] Nelze otevřít {video_path.name}")
+        return 0
+
+    src_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    duration = total_frames / src_fps if src_fps > 0 else 0.0
+
+    if SAMPLE_MODE == "fps":
+        step = max(1, int(round(src_fps / SAMPLE_FPS)))
+    elif SAMPLE_MODE == "every_n":
+        step = max(1, SAMPLE_EVERY_N)
+    else:
+        print(f"  [ERROR] Neznámý SAMPLE_MODE: {SAMPLE_MODE}")
+        cap.release()
+        return 0
+
+    estimated = total_frames // step
+    print(f"  FPS zdroje: {src_fps:.2f}  |  framů: {total_frames}  |  délka: {duration:.1f}s")
+    print(f"  Krok: každý {step}. frame  →  cca {estimated} výstupních framů")
+
+    frame_idx = 0       # pozice v zdrojovém videu
+    saved_idx = 1       # pořadové číslo výstupního framu
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        if frame_idx % step == 0:
+            filename = f"tram_{TRAM_ID}_v{video_num}_f{saved_idx:04d}.jpg"
+            out_path = output_dir / filename
+
+            # Encode + tofile — bezpečné pro non-ASCII cesty (Windows + diakritika)
+            success, buf = cv2.imencode(
+                ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY]
+            )
+            if success:
+                buf.tofile(str(out_path))
+                # Záznam do indexu
+                timestamp_s = frame_idx / src_fps if src_fps > 0 else 0.0
+                csv_rows.append({
+                    "frame_id": f"tram_{TRAM_ID}_v{video_num}_f{saved_idx:04d}",
+                    "source_video": video_path.name,
+                    "source_frame": frame_idx,
+                    "source_timestamp_s": f"{timestamp_s:.3f}",
+                    "gt_graffiti": "",
+                    "gt_severity": "",
+                    "gt_notes": "",
+                })
+                saved_idx += 1
+            else:
+                print(f"  [WARN] cv2.imencode selhalo na frame {frame_idx}")
+
+        frame_idx += 1
+
+    cap.release()
+    return saved_idx - 1
+
+
+def main():
+    if not VIDEO_DIR.exists():
+        print(f"[ERROR] Složka videí neexistuje: {VIDEO_DIR.resolve()}")
+        sys.exit(1)
+
+    # Příprava výstupní struktury: ARSI_dataset/tram_{ID}/raw/
+    tram_dir = OUTPUT_ROOT / f"tram_{TRAM_ID}"
+    raw_dir = tram_dir / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
+    # Najdi všechna videa odpovídající patternu pro daný TRAM_ID
+    videos = []
+    for f in sorted(VIDEO_DIR.iterdir()):
+        m = VIDEO_PATTERN.match(f.name)
+        if m and m.group(1) == TRAM_ID:
+            video_num = int(m.group(2))
+            videos.append((video_num, f))
+
+    videos.sort(key=lambda x: x[0])
+
+    if not videos:
+        print(f"[ERROR] V {VIDEO_DIR} nenalezena videa pro TRAM_ID={TRAM_ID}")
+        print(f"        Očekávaný pattern: {TRAM_ID}-N.mp4 (např. {TRAM_ID}-1.mp4)")
+        sys.exit(1)
+
+    print("=" * 60)
+    print("  ARSI Frame Extraction")
+    print("=" * 60)
+    print(f"  Tram ID:     {TRAM_ID}")
+    print(f"  Videí:       {len(videos)}  →  {[v[1].name for v in videos]}")
+    print(f"  Vstup:       {VIDEO_DIR.resolve()}")
+    print(f"  Výstup:      {raw_dir.resolve()}")
+    if SAMPLE_MODE == "fps":
+        print(f"  Sample:      {SAMPLE_FPS} fps")
+    else:
+        print(f"  Sample:      každý {SAMPLE_EVERY_N}. frame")
+    print("=" * 60)
+
+    csv_rows = []
+    total_saved = 0
+    for video_num, video_path in videos:
+        print(f"\n[Video {video_num}] {video_path.name}")
+        saved = extract_video(video_path, video_num, raw_dir, csv_rows)
+        print(f"  → uloženo {saved} framů")
+        total_saved += saved
+
+    # Zápis indexu
+    index_path = tram_dir / f"tram_{TRAM_ID}_index.csv"
+    with open(index_path, "w", newline="", encoding="utf-8") as f:
+        fieldnames = [
+            "frame_id", "source_video", "source_frame",
+            "source_timestamp_s", "gt_graffiti", "gt_severity", "gt_notes"
+        ]
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(csv_rows)
+
+    print("\n" + "=" * 60)
+    print(f"  HOTOVO")
+    print(f"  Framů celkem:  {total_saved}")
+    print(f"  Framy:         {raw_dir.resolve()}")
+    print(f"  Ground truth:  {index_path.resolve()}")
+    print("=" * 60)
+    print("\n  DALŠÍ KROKY:")
+    print(f"  1) Otevři {index_path.name} a vyplň gt_* sloupce")
+    print(f"  2) Spusť mask_windows.py na složku raw/ → vytvoří masked/")
+    print(f"  3) Vyber referenční obrázek do {tram_dir / 'references'}/")
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    main()
