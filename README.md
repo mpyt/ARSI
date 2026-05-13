@@ -22,3 +22,14 @@ Vstupní proměnné
 - `OUTPUT_DIR` - cesta k výstupní složce pro zpracované soubory 
 - `COLOR` - nastavení pomocí RGB barvu masky
 - `OUTPUT_SUFFIX` - suffix pro zpracované soubory
+
+# video_sample_name.py
+
+Skript pro střih snímků z videa po 1 fps + jejich následný rename
+
+## Použití
+
+cd ~/projects/ARSI    nebo kdekoli kde to chceš mít
+mkdir videos
+zkopíruj 1762-*.mp4 do videos/
+python extract_frames.py
